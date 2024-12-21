@@ -2,10 +2,11 @@ use clap::Parser;
 use regex::Regex;
 use std::fs;
 use std::io::{self, Read};
+use log::{debug};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "md_to_mermaid")]
-#[command(about = "Convert Markdown to Mermaid format with comments", long_about = None)]
+#[command(about = "Convert Markdown to Mermaid format", long_about = None)]
 struct Args {
     #[arg(short, long)]
     input: Option<String>,
@@ -25,22 +26,27 @@ fn parse_markdown_to_mermaid(markdown: &str, direction: &str) -> String {
     let re = Regex::new(r"^(\s*)[-*+] (.+?)(?:\s*//\s*(.+))?$").unwrap();
 
     for (i, line) in markdown.lines().enumerate() {
+        debug!("Processing line {}: {}", i + 1, line);
         if let Some(captures) = re.captures(line) {
             let indent = captures[1].len();
             let content = captures[2].trim();
-            let comment = captures.get(3).map(|m| m.as_str().trim());
+            let label = captures.get(3).map(|m| m.as_str().trim());
             let node_id = format!("node_{}", i);
-
             nodes.push((node_id.clone(), content.to_string()));
 
             if !last_nodes.is_empty() {
+                // last_nodesが空でない場合、親ノードを探す処理
                 let parent = last_nodes.iter().rev().find(|(_, level)| *level < indent);
+                // last_nodesの中でインデントが現在のインデントより浅い（親ノード）ものを探す
                 if let Some((parent_id, _)) = parent {
-                    edges.push((parent_id.clone(), node_id.clone(), comment.map(|c| c.to_string())));
+                    // 親ノードが見つかった場合、その親ノードIDと現在のノードIDを辺として追加
+                    edges.push((parent_id.clone(), node_id.clone(), label.map(|c| c.to_string())));
                 }
             }
 
+            // 現在のノードIDとインデントをlast_nodesに追加（次回の親ノードとして使用）
             last_nodes.push((node_id.clone(), indent));
+            // last_nodesをインデントが現在のインデント以下のノードに絞り込む
             last_nodes.retain(|(_, level)| *level <= indent);
         }
     }
@@ -49,9 +55,9 @@ fn parse_markdown_to_mermaid(markdown: &str, direction: &str) -> String {
     for (node_id, content) in nodes {
         mermaid.push_str(&format!("    {node_id}[\"{content}\"]\n"));
     }
-    for (from, to, comment) in edges {
-        if let Some(comment_text) = comment {
-            mermaid.push_str(&format!("    {from} -->|\"{comment_text}\"| {to}\n"));
+    for (from, to, label) in edges {
+        if let Some(label_text) = label {
+            mermaid.push_str(&format!("    {from} -->|\"{label_text}\"| {to}\n"));
         } else {
             mermaid.push_str(&format!("    {from} --> {to}\n"));
         }
@@ -61,14 +67,20 @@ fn parse_markdown_to_mermaid(markdown: &str, direction: &str) -> String {
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
+    debug!("Parsed arguments: {:?}", args);
     let markdown = if let Some(input_path) = args.input {
+        debug!("Reading input file from: {}", input_path);
         fs::read_to_string(&input_path).expect("Failed to read input file")
     } else {
+        debug!("No input file specified, reading from standard input");
         let mut buffer = String::new();
         io::stdin().read_to_string(&mut buffer).expect("Failed to read from standard input");
         buffer
     };
+
+    debug!("Input markdown txt: \n{}", markdown);
 
     let mermaid = parse_markdown_to_mermaid(&markdown, &args.direction);
 
