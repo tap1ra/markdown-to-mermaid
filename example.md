@@ -1,5 +1,5 @@
-- Start
-  - Step 1 // Proceed to Step 1
-    - Step 1.1 // Detailed step
-  - Step 2 // Another option
-  - End
+- Page A localhost:3000
+  - /api/users // ユーザー一覧のデータ取得
+    - localhost:3001/v1/users // 外部APIへの依存
+  - /api/notice // お知らせデータ取得
+    - localhost:3002/v1/notices // 外部APIへの依存
